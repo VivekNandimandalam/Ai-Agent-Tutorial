@@ -1,6 +1,7 @@
 # AI Agent Tutorial
 
-This project demonstrates how to build a research assistant agent using LangChain, OpenAI, Anthropic, and Google Generative AI models, with a minimal chat-like frontend powered by Streamlit.
+This project demonstrates how to build a research assistant agent using LangChain, OpenAI, Anthropic, and Google Generative AI models, with a minimal chat-like frontend powered by Streamlit.![Recording 2025-08-11 182600](https://github.com/user-attachments/assets/6bbc5d1c-1866-4b8c-8fa1-c3ba8b2844d9)
+
 
 ## Features
 

@@ -10,7 +10,8 @@ load_dotenv()
 st.set_page_config(
     page_title="AI Research Assistant",
     page_icon="🔍",
-    layout="wide"
+    layout="centered",
+    initial_sidebar_state="expanded"
 )
 
 # Check for API key

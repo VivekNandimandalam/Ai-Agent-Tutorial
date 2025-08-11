@@ -1,21 +1,94 @@
-
-
 import streamlit as st
-from main import create_agent_executor, process_response
+import os
+from dotenv import load_dotenv
+from pydantic import BaseModel
 
-# Set page config for better performance
+# Load environment variables
+load_dotenv()
+
+# Set page config
 st.set_page_config(
     page_title="AI Research Assistant",
     page_icon="🔍",
-    layout="centered",
-    initial_sidebar_state="expanded"    
+    layout="wide"
 )
 
-# Cache the heavy agent creation
+# Check for API key
+if not os.getenv("GOOGLE_API_KEY"):
+    st.error("🚨 GOOGLE_API_KEY not found in environment variables!")
+    st.info("Please add your Google API Key in the Streamlit Cloud secrets or environment variables.")
+    st.stop()
+
+# Import heavy dependencies only when needed
 @st.cache_resource
 def get_agent_and_parser():
     """Cache the agent executor and parser to avoid recreating on each run"""
-    return create_agent_executor()
+    try:
+        from langchain_google_genai import ChatGoogleGenerativeAI
+        from langchain.output_parsers import PydanticOutputParser
+        from langchain.agents import create_tool_calling_agent, AgentExecutor
+        from langchain.prompts import ChatPromptTemplate
+        from tools import search_tool, wiki_tool, save_tool
+        
+        class ResearchResponse(BaseModel):
+            topic: str
+            summary: str
+            sources: list[str]
+            tools_used: list[str]
+
+        llm = ChatGoogleGenerativeAI(
+            model="gemini-2.0-flash",
+            api_key=os.getenv("GOOGLE_API_KEY")
+        )   
+
+        parser = PydanticOutputParser(pydantic_object=ResearchResponse)
+
+        prompt = ChatPromptTemplate.from_messages([
+            ("system", "You are a helpful research assistant. You will help the user with their research topic."
+             "Answer the user query and use necessary tools."
+             "wrap the output in this format and provide no other text\n{format_instructions}"),
+            ("placeholder", "{chat_history}"),
+            ("human", "{query}"),
+            ("placeholder", "{agent_scratchpad}"),
+        ]).partial(format_instructions=parser.get_format_instructions())
+             
+        tools = [search_tool, wiki_tool, save_tool]   
+        agent = create_tool_calling_agent(
+            llm=llm,    
+            prompt=prompt,
+            tools=tools
+        )
+        
+        agent_executor = AgentExecutor(
+            agent=agent,
+            tools=tools,    
+            verbose=True,
+        )
+        
+        return agent_executor, parser
+        
+    except ImportError as e:
+        st.error(f"Import error: {e}")
+        st.info("Please check that all required packages are installed.")
+        st.stop()
+    except Exception as e:
+        st.error(f"Error creating agent: {e}")
+        st.stop()
+
+def process_response(raw_response, parser):
+    """Process and parse the agent response"""
+    output = raw_response["output"].strip()
+    
+    if output.startswith("```json"):
+        output = output.removeprefix("```json").removesuffix("```").strip()
+    elif output.startswith("```"):
+        output = output.removeprefix("```").removesuffix("```").strip()
+
+    try:
+        structured_response = parser.parse(output)
+        return structured_response, None
+    except Exception as e:
+        return None, f"Error parsing response: {e}"
 
 # Main UI
 st.markdown(
@@ -23,7 +96,7 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# Initialize session state for query history (optional)
+# Initialize session state
 if "queries" not in st.session_state:
     st.session_state.queries = []
 
@@ -40,7 +113,11 @@ with st.form("research_form"):
 if submitted and query:
     # Load cached agent and parser
     with st.spinner("Loading research tools..."):
-        agent_executor, parser = get_agent_and_parser()
+        try:
+            agent_executor, parser = get_agent_and_parser()
+        except Exception as e:
+            st.error(f"Failed to initialize research tools: {e}")
+            st.stop()
     
     # Add query to history
     st.session_state.queries.append(query)
@@ -92,7 +169,7 @@ if submitted and query:
                 st.write("Please try again with a different query.")
     
     with col2:
-        # Optional: Show query history or tips
+        # Show query history
         if len(st.session_state.queries) > 1:
             st.subheader("Recent Queries")
             for i, past_query in enumerate(reversed(st.session_state.queries[-5:]), 1):

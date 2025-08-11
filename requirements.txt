@@ -1,7 +1,8 @@
+streamlit
 langchain
-wikipedia
 langchain-community
-langchain-openai
-langchain-anthropic
+langchain-google-genai
+python-dotenv
 pydantic
+wikipedia
 duckduckgo-search
